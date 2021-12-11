@@ -1,5 +1,5 @@
-# FRL
-FRL - Project for AI CS.6364 that runs as a interactive song recommender.
+# IRS
+IRS - Project for AI CS.6364 that runs as a interactive song recommender.
 
 ## Dataset
 [**Million Song Dataset**](http://millionsongdataset.com) severs as dataset to train the interactive song recoommender.
