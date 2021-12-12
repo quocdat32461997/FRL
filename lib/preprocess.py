@@ -4,6 +4,7 @@ import os
 import pickle
 import argparse
 import numpy as np
+from tqdm import tqdm
 import networkx as nx
 from multiprocessing import Pool
 from functools import partial
@@ -45,7 +46,7 @@ def process_rating(args):
 
     # parse into batches for parallel programming
     batch_size = len(inter_data) // args.ncpu + 1
-    batches = [inter_data[i:i + batch_size] for i in range(len(inter_data), batch_size)]
+    batches = [inter_data[i:i + batch_size] for i in range(0, len(inter_data), batch_size)]
 
     # parse into partial function
     _convert_rating = partial(convert_rating)
@@ -55,7 +56,7 @@ def process_rating(args):
     inter_data = pool.map(_convert_rating, batches)
     inter_data = np.array([x for x in inter_data])
 
-    with open(os.path.join(args.output_dir, 'rating.txt'), 'wb') as file:
+    with open(os.path.join(args.output_dir, 'rating.pkl'), 'wb') as file:
         pickle.dump(inter_data, file)
 
     return inter_data
@@ -67,7 +68,7 @@ def convert_rating(data):
     # when play-count > 1, consider as interesting
 
     # split line by tab and get unique user and song ids
-    for i, line in enumerate(data):
+    for i, line in tqdm(zip(range(len(data)), data), total=len(data)):
         line = line.split('\t')  # split by tab
         line[-1] = int(line[-1])  # convert rating to int
         line[-1] = 0 if line[-1] == 0 else 1  # binarize rating
