@@ -45,17 +45,17 @@ def process_rating(args):
 
     # parse into batches for parallel programming
     batch_size = len(inter_data) // args.ncpu + 1
-    batches = [inter_data[i:i + batch_size] for i in range(len(data), batch_size)]
+    batches = [inter_data[i:i + batch_size] for i in range(len(inter_data), batch_size)]
 
     # parse into partial function
     _convert_rating = partial(convert_rating)
 
     # extract unique users and songs
-    pool = Pool(ags.ncpu)
+    pool = Pool(args.ncpu)
     inter_data = pool.map(_convert_rating, batches)
     inter_data = np.array([x for x in inter_data])
 
-    with open(os.path.join(args.output_dir, 'rating.txt'), 'w') as file:
+    with open(os.path.join(args.output_dir, 'rating.txt'), 'wb') as file:
         pickle.dump(inter_data, file)
 
     return inter_data
