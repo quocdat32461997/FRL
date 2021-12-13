@@ -1,6 +1,7 @@
 # preprocess.py
 
 import os
+import json
 import pickle
 import argparse
 import numpy as np
@@ -9,26 +10,52 @@ import networkx as nx
 from multiprocessing import Pool
 from functools import partial
 
+INFO_KEYS = ['id', 'title', 'artist_id', 'artist_name']
+
 
 def main(args):
 
     # process rating data
-    inter_data = process_rating(args)
+    #inter_data = process_rating(args)
 
     # extract song entities and parse into knowledge-graph
-    process_kg(args, inter_data)
+    process_kg(args)
 
 
     pass
 
 
-def process_kg(args, data):
+def process_kg(args):
     # Function to map song entities in Million Song Dataset w/ interaction-data
     # and parse to knowledge graph
 
-    # TODO: read and extract songs from MSD dataset
+    print('converting to kg')
 
-    # add song entities from interaction_data into knowledge graph
+    # read and extract songs from mapped Echo Nest data
+    files = []
+    for sub in os.listdir(args.entity_data):
+        if not sub.endswith('.DS_Store'):
+            files.extend([os.path.join(args.entity_data, sub, file) for
+                          file in os.listdir(os.path.join(args.entity_data, sub))])
+
+    files = files[:100]
+    # parse into batchese for parallel programming
+    batch_size = len(files) // args.ncpu + 1
+    batches = [files[i:i + batch_size] for i in range(0, len(files), batch_size)]
+
+    # extract song_id, title, artist_id, artist_naame, album
+    pool = Pool(args.ncpu)
+    data = pool.map(convert_kg, batches)
+
+    print(len(data), [len(x) for x in data])
+    # build knowledge graph
+    graph, adj_mtrx = build_kg(data)
+
+    # save graph and adj_mtrx
+    with open(os.path.join(args.output_dir, 'graph.pkl'), 'wb') as file:
+        pickle.dump(graph, file)
+    with open(os.path.join(args.output_dir, 'adj_mtrx.pkl'), 'wb') as file:
+        pickle.dump(adj_mtrx, file)
     pass
 
 
@@ -42,24 +69,33 @@ def process_rating(args):
 
     # read inter-data
     with open(args.inter_data) as file:
-        inter_data = file.read().split('\n')
+        data = file.read().split('\n')
 
     # parse into batches for parallel programming
-    batch_size = len(inter_data) // args.ncpu + 1
-    batches = [inter_data[i:i + batch_size] for i in range(0, len(inter_data), batch_size)]
-
-    # parse into partial function
-    _convert_rating = partial(convert_rating)
+    batch_size = len(data) // args.ncpu + 1
+    batches = [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
 
     # extract unique users and songs
     pool = Pool(args.ncpu)
-    inter_data = pool.map(_convert_rating, batches)
-    inter_data = np.array([x for x in inter_data])
+    data = pool.map(convert_rating, batches)
 
-    with open(os.path.join(args.output_dir, 'rating.pkl'), 'wb') as file:
-        pickle.dump(inter_data, file)
+    users, songs = [], []
+    with open(os.path.join(args.output_dir, 'rating.txt'), 'w') as file:
+        for d in data:
+            for line in d:
+                file.write('{}\t{}\t{}\n'.format(*line))
+                users.append(line[0])
+                songs.append(line[1])
 
-    return inter_data
+    users = list(set(users))
+    songs = list(set(songs))
+    print('Number of users', len(users))
+    print('Number of songs', len(songs))
+
+    with open(os.path.join(args.output_dir, 'meta_data.pkl'), 'wb') as file:
+        pickle.dump({'users': users, 'songs': songs}, file)
+
+    return data
 
 
 def convert_rating(data):
@@ -77,10 +113,58 @@ def convert_rating(data):
     return data
 
 
-def convert_kg(args):
-    print('converting to kg')
+def build_kg(data):
+    # new network graph
+    graph = nx.DiGraph()
 
-    pass
+    for nodes in data:
+        for node in nodes:
+            # add edge: song-artist
+            print(node)
+            graph.add_edge(node['id'], node['artist_id'], relation='song.created_by')
+
+            # update nodes: song and artist w/ real name
+            graph.nodes[node['id']]['name'] = node['title']
+            graph.nodes[node['artist_id']]['name'] = node['artist_name']
+
+            # update
+            # add edge: song-album if existing
+            if node['album_name'] is not None and node['album_date'] is not None:
+                graph.add_edge(node['id'], node['album_name'], relation='song.in_album') # song-album
+                graph.add_edge(node['id'], node['album_date'], relation='song.album_released_in') # song-album-date
+                graph.add_edge(node['album_name'], node['album_date'], relation='album.released_in') # album-release-date
+
+    # return graph and adjacency-matrix as dict
+    return graph, graph.adjacency()
+
+
+def convert_kg(data):
+    # Function to extract song info
+    _data = []
+    for i, file in tqdm(zip(range(len(data)), data), total=len(data)):
+        # read file
+        with open(file) as f:
+            data[i] = json.load(f)['response']['songs']
+
+        # skip if no data
+        if len(data[i]) == 0:
+            continue
+        _data.append(data[i][0])
+
+        # get album_name and album_data
+        if len(_data[-1]['tracks']) == 0 or 'album_name' not in _data[-1]['tracks'][0] or 'album_date' not in _data[-1]['tracks'][0]:
+            album_name = None
+            album_date = None
+        else:
+            album_name = _data[-1]['tracks'][0]['album_name']
+            album_date = _data[-1]['tracks'][0]['album_date'].split('-')[0]
+
+        # get song_id, title, artist_id, artist_name,
+        _data[-1] = {key: _data[-1][key] for key in INFO_KEYS}
+        _data[-1]['album_name'] = album_name
+        _data[-1]['album_date'] = album_date
+
+    return _data
 
 
 if __name__ == '__main__':
