@@ -16,10 +16,10 @@ INFO_KEYS = ['id', 'title', 'artist_id', 'artist_name']
 def main(args):
 
     # process rating data
-    #inter_data = process_rating(args)
+    inter_data, users, songs = process_rating(args)
 
     # extract song entities and parse into knowledge-graph
-    process_kg(args)
+    #process_kg(args)
 
 
     pass
@@ -38,8 +38,7 @@ def process_kg(args):
             files.extend([os.path.join(args.entity_data, sub, file) for
                           file in os.listdir(os.path.join(args.entity_data, sub))])
 
-    files = files[:100]
-    # parse into batchese for parallel programming
+    # parse into batches for parallel programming
     batch_size = len(files) // args.ncpu + 1
     batches = [files[i:i + batch_size] for i in range(0, len(files), batch_size)]
 
@@ -47,7 +46,6 @@ def process_kg(args):
     pool = Pool(args.ncpu)
     data = pool.map(convert_kg, batches)
 
-    print(len(data), [len(x) for x in data])
     # build knowledge graph
     graph, adj_mtrx = build_kg(data)
 
@@ -69,33 +67,32 @@ def process_rating(args):
 
     # read inter-data
     with open(args.inter_data) as file:
-        data = file.read().split('\n')
+        data = file.read().split('\n')[:1000000]
 
     # parse into batches for parallel programming
-    batch_size = len(data) // args.ncpu + 1
+    batch_size = 100000 #len(data) // args.ncpu + 1
     batches = [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
 
     # extract unique users and songs
     pool = Pool(args.ncpu)
-    data = pool.map(convert_rating, batches)
+    data, users, songs = zip(*pool.map(convert_rating, batches))
 
-    users, songs = [], []
-    with open(os.path.join(args.output_dir, 'rating.txt'), 'w') as file:
-        for d in data:
-            for line in d:
-                file.write('{}\t{}\t{}\n'.format(*line))
-                users.append(line[0])
-                songs.append(line[1])
+    # flatten data and songs
+    data = [x for d in data for x in d]
+    songs = list(set([x for s in songs for x in s]))
+    users = list(set([x for u in users for x in u]))
 
-    users = list(set(users))
-    songs = list(set(songs))
+    # print meta-data
     print('Number of users', len(users))
     print('Number of songs', len(songs))
 
+    # save binarized data and meta-data
+    with open(os.path.join(args.output_dir, 'rating.pkl'), 'wb') as file:
+        pickl.dump(data, file)
     with open(os.path.join(args.output_dir, 'meta_data.pkl'), 'wb') as file:
         pickle.dump({'users': users, 'songs': songs}, file)
 
-    return data
+    return data, users, songs
 
 
 def convert_rating(data):
@@ -104,13 +101,16 @@ def convert_rating(data):
     # when play-count > 1, consider as interesting
 
     # split line by tab and get unique user and song ids
+    songs, users = [], []
     for i, line in tqdm(zip(range(len(data)), data), total=len(data)):
         line = line.split('\t')  # split by tab
         line[-1] = int(line[-1])  # convert rating to int
         line[-1] = 0 if line[-1] == 0 else 1  # binarize rating
         data[i] = line
+        songs.append(line[1])
+        users.append(line[0])
 
-    return data
+    return data, list(set(users)), list(set(songs))
 
 
 def build_kg(data):
@@ -152,7 +152,8 @@ def convert_kg(data):
         _data.append(data[i][0])
 
         # get album_name and album_data
-        if len(_data[-1]['tracks']) == 0 or 'album_name' not in _data[-1]['tracks'][0] or 'album_date' not in _data[-1]['tracks'][0]:
+        if len(_data[-1]['tracks']) == 0 or 'album_name' not in _data[-1]['tracks'][0] or \
+                'album_date' not in _data[-1]['tracks'][0]:
             album_name = None
             album_date = None
         else:
