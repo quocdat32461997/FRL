@@ -88,7 +88,7 @@ def process_rating(args):
         data = [x for d in data for x in d]
         for s in _songs:
             songs.extend(s)
-        for u in users:
+        for u in _users:
             users.extend(u)
 
         # save i-th binarized data
