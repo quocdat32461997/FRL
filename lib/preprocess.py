@@ -16,7 +16,7 @@ INFO_KEYS = ['id', 'title', 'artist_id', 'artist_name']
 def main(args):
 
     # process rating data
-    inter_data, users, songs = process_rating(args)
+    users, songs = process_rating(args)
 
     # extract song entities and parse into knowledge-graph
     #process_kg(args)
@@ -67,32 +67,52 @@ def process_rating(args):
 
     # read inter-data
     with open(args.inter_data) as file:
-        data = file.read().split('\n')[:1000000]
+        data = file.read().split('\n')
 
     # parse into batches for parallel programming
-    batch_size = 100000 #len(data) // args.ncpu + 1
+    batch_size = 1000000 #len(data) // args.ncpu + 1
     batches = [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
+    n_batch = len(batches) // args.ncpu + 1
+    # create dir to save binarized data
+    if not os.path.exists(os.path.join(args.output_dir, 'processed')):
+        os.mkdir(os.path.join(args.output_dir, 'processed'))
 
     # extract unique users and songs
-    pool = Pool(args.ncpu)
-    data, users, songs = zip(*pool.map(convert_rating, batches))
+    songs, users = [], []
+    for i in range(len(batches) // args.ncpu + 1):
+        pool = Pool(args.ncpu)
+        data, _users, _songs = zip(*pool.map(convert_rating, batches[i:i + args.ncpu]))
+        pool.close()
 
-    # flatten data and songs
-    data = [x for d in data for x in d]
-    songs = list(set([x for s in songs for x in s]))
-    users = list(set([x for u in users for x in u]))
+        # flatten data, users and songs
+        data = [x for d in data for x in d]
+        for s in _songs:
+            songs.extend(s)
+        for u in users:
+            users.extend(u)
+
+        # save i-th binarized data
+        path = os.path.join(args.output_dir, 'processed', 'rating_{}.pkl'.format(i))
+        print('Saving data-{}'.format(path))
+        with open(path, 'wb') as file:
+            pickle.dump(data, file)
+
+        # del data
+        del data
+
+    # get unique users and songs
+    songs = list(set(songs))
+    users = list(set(users))
 
     # print meta-data
     print('Number of users', len(users))
     print('Number of songs', len(songs))
 
-    # save binarized data and meta-data
-    with open(os.path.join(args.output_dir, 'rating.pkl'), 'wb') as file:
-        pickl.dump(data, file)
+    # save meta-data
     with open(os.path.join(args.output_dir, 'meta_data.pkl'), 'wb') as file:
         pickle.dump({'users': users, 'songs': songs}, file)
 
-    return data, users, songs
+    return users, songs
 
 
 def convert_rating(data):
