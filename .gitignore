@@ -128,3 +128,5 @@ dmypy.json
 .pyre/
 **/*.zip
 **/.idea
+**/.DS_Store
+**/*.tar.bz2
