@@ -16,10 +16,10 @@ INFO_KEYS = ['id', 'title', 'artist_id', 'artist_name']
 def main(args):
 
     # process rating data
-    users, songs = process_rating(args)
+    #users, songs = process_rating(args)
 
     # extract song entities and parse into knowledge-graph
-    #process_kg(args)
+    process_kg(args)
 
 
     pass
@@ -47,13 +47,18 @@ def process_kg(args):
     data = pool.map(convert_kg, batches)
 
     # build knowledge graph
-    graph, adj_mtrx = build_kg(data)
+    graph = build_kg(data)
+
+    # additional nodes
+    with open(os.path.join(args.output_dir, 'meta_data.pkl'), 'rb') as file:
+        data = pickle.load(file)
+
+    for user in data['users']:
+        graph.add_node(user)
 
     # save graph and adj_mtrx
     with open(os.path.join(args.output_dir, 'graph.pkl'), 'wb') as file:
         pickle.dump(graph, file)
-    with open(os.path.join(args.output_dir, 'adj_mtrx.pkl'), 'wb') as file:
-        pickle.dump(adj_mtrx, file)
     pass
 
 
@@ -155,7 +160,7 @@ def build_kg(data):
                 graph.add_edge(node['album_name'], node['album_date'], relation='album.released_in') # album-release-date
 
     # return graph and adjacency-matrix as dict
-    return graph, graph.adjacency()
+    return graph
 
 
 def convert_kg(data):
