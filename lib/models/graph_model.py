@@ -19,14 +19,13 @@ class GraphModel(torch.nn.Module):
                                                       hidden_size=None)
 
     def forward(self, inputs):
-        # move inputs to proper devices
-        inputs = to_cuda(inputs)
+        # inputs: list of past-click list
+        for i in range(len(inputs)):
+            # yield node representation
+            inputs[i] = self.graph_conv(to_cuda(inputs[i]))
 
-        # yield node representation
-        inputs = self.graph_conv(inputs)
-
-        # yield state representation based on play-history
-        inputs = self.behavior_aggregator(inputs)
+            # yield state representation based on play-history
+            inputs[i] = self.behavior_aggregator(inputs[i])
 
         return inputs
 
@@ -48,6 +47,8 @@ class GraphConv(torch.nn.Module):
         self.dropout = torch.nn.Dropout(p=dropout)
 
     def forward(self, inputs):
+        # inputs: list of past-clicks
+
         # [0] - aggregate representation of neighboring nodes
         # [1] - get node features
         features = [self.aggregator(self.graph, inputs),

@@ -19,6 +19,7 @@ class GraphAggregator(torch.nn.Module):
         return self.entity_embeds(inputs)
 
     def forward(self, graph, nodes):
+        # nodes: list of nodes (aka clicks) per user
         nodes = [self._aggregate(graph=graph,
                                  nodes=[node],
                                  k_hop=self.k_hop) for node in nodes]
@@ -58,4 +59,4 @@ class BehaviorAggregator(torch.nn.Module):
                                 batch_first=True)
 
     def forward(self, inputs):
-        return inputs
+        return self.gru(inputs)
