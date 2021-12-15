@@ -19,14 +19,13 @@ class GraphModel(torch.nn.Module):
                                                       hidden_size=None)
 
     def forward(self, inputs):
-        # move inputs to proper devices
-        inputs = to_cuda(inputs)
+        # inputs: list of past-click list
+        for i in range(len(inputs)):
+            # yield node representation
+            inputs[i] = self.graph_conv(to_cuda(inputs[i]))
 
-        # yield node representation
-        inputs = self.graph_conv(inputs)
-
-        # yield state representation based on play-history
-        inputs = self.behavior_aggregator(inputs)
+            # yield state representation based on play-history
+            inputs[i] = self.behavior_aggregator(inputs[i])
 
         return inputs
 
@@ -47,15 +46,27 @@ class GraphConv(torch.nn.Module):
         self.bias = torch.nn.Parameter(torch.randn(out_features))
         self.dropout = torch.nn.Dropout(p=dropout)
 
-    def forward(self, inputs):
+    def forward(self, inputs, candidates):
+        # inputs: list of past-clicks
+        # candidates: list of past-clicks + their neighbors extracted previously
+
         # [0] - aggregate representation of neighboring nodes
         # [1] - get node features
-        features = [self.aggregator(self.graph, inputs),
-                    self.aggregator.get_embedding(inputs)]
+        features = [self.aggregator(graph=self.graph, nodes=inputs),
+                    self.aggregator.get_embedding(inputs=inputs)]
 
         # linear transform the neighboring node representation
         # and return results
-        return self._linear_transform(features=features)
+        features = self._linear_transform(features=features)
+
+        # get neighbor nodes for the lastest item
+        candidates.extend(self.aggregator.candidate_select(grap=graph,
+                                                      nodes=inputs[-1]))
+        # get embeddings of candidates
+        cand_features = self.aggregator(graph=self.graph, nodes=candidates)
+        cand_features = torch.cat(cand_features, dim=0)
+
+        return features, cand_features
 
     def _linear_transform(self, features):
         # Function to linearly transform neighbor and node features
@@ -64,12 +75,3 @@ class GraphConv(torch.nn.Module):
 
         return torch.nn.functional.relu(
             self.dropout(sum(features)))
-
-
-class CandidateSelect(torch.nn.Module):
-    def __init__(self, name='candidate_select'):
-        super(CandidateSelect, self).__init__(name=name)
-        pass
-
-    def forward(self, inputs):
-        return None
