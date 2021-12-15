@@ -19,23 +19,31 @@ class GraphAggregator(torch.nn.Module):
         return self.entity_embeds(inputs)
 
     def forward(self, graph, nodes):
-        # nodes: list of nodes (aka clicks) per user
-        nodes = [self._aggregate(graph=graph,
-                                 nodes=[node],
-                                 k_hop=self.k_hop) for node in nodes]
+        # Return aggregated node representation and item candidates
+        #   - nodes: list of nodes (aka clicks) per user
+        #   - graph: networkx object
+        nodes = [self._aggregate(graph=graph, nodes=[node],
+                                                  k_hop=self.k_hop) for node in nodes]
+
         return nodes
 
     def _aggregate(self, graph, nodes, k_hop):
         # Function to recursively aggregate k-hop-depth nodes
+        #   - graph: networkx object
+        #   - nodes: list of tensors (aka nodes)
+        #   - k_hop
+
         if k_hop > 0:
-            # find neighbor nodes & loop by batch
-            nodes = [list(graph.neighbors(node)) for node in nodes]
+            # find neighbor nodes & find candidates
+            for i, node in enumerate(nodes):
+                # get neighbor nodes
+                nodes[i] = list(graph.neighbors(node))
 
-            # recursively call to next depth
-            nodes = [self._aggregate(graph, _nodes, k_hop - 1)
-                     for _nodes in nodes]
+                # recursively call to next depth
+                nodes[i] = self._aggregate(graph=graph, nodes=nodes[i],
+                                           k_hop=k_hop - 1)
 
-        # concat by batch
+        # concat by number of past-clicks
         nodes = torch.cat(nodes, dim=0)
 
         # lookup embeddings
@@ -45,6 +53,32 @@ class GraphAggregator(torch.nn.Module):
         nodes = torch.mean(nodes, dim=-1)
 
         return nodes
+
+    def candidate_select(self, graph, nodes):
+        return self._candidate_select(graph=graph, nodes=[nodes])
+
+    def _candidate_select(self, graph, nodes, k_hop):
+        # Function to recursively aggregate k-hop-depth nodes
+        # and select candidates
+        #   - graph: networkx object
+        #   - nodes: list of tensors (aka nodes)
+        #   - k_hop
+
+        # filter item candidtes only
+        candidates = [node for node in nodes if graph.nodes[node]['is_item'] is True]
+
+        if k_hop > 0:
+            # find neighbor nodes & find candidates
+            for i, nodes in enumerate(candidates):
+                # get neighbor nodes
+                nodes = list(graph.neighbors(nodes))
+
+                # recursively call to next depth
+                candidates.extend(self._aggregate(graph=graph, nodes=nodes,
+                                           k_hop=k_hop - 1))
+
+        # select unique candidates only
+        return list(set(candidates))
 
 
 class BehaviorAggregator(torch.nn.Module):

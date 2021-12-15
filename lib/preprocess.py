@@ -140,17 +140,18 @@ def convert_rating(data):
 
 def build_kg(data):
     # new network graph
-    graph = nx.DiGraph()
+    graph = nx.Graph()
 
     for nodes in data:
         for node in nodes:
             # add edge: song-artist
-            print(node)
             graph.add_edge(node['id'], node['artist_id'], relation='song.created_by')
 
             # update nodes: song and artist w/ real name
             graph.nodes[node['id']]['name'] = node['title']
+            graph.nodes[node['id']]['is_item'] = True
             graph.nodes[node['artist_id']]['name'] = node['artist_name']
+            graph.nodes[node['artist_id']]['is_item'] = False
 
             # update
             # add edge: song-album if existing
@@ -159,6 +160,9 @@ def build_kg(data):
                 graph.add_edge(node['id'], node['album_date'], relation='song.album_released_in') # song-album-date
                 graph.add_edge(node['album_name'], node['album_date'], relation='album.released_in') # album-release-date
 
+                # update album-related nodes
+                graph.nodes[node['album_name']]['is_item'] = False
+                graph.nodes[node['album_date']]['is_item'] = False
     # return graph and adjacency-matrix as dict
     return graph
 
