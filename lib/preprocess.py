@@ -21,7 +21,6 @@ def main(args):
     # extract song entities and parse into knowledge-graph
     process_kg(args)
 
-
     pass
 
 
@@ -53,8 +52,13 @@ def process_kg(args):
     with open(os.path.join(args.output_dir, 'meta_data.pkl'), 'rb') as file:
         data = pickle.load(file)
 
-    for user in data['users']:
-        graph.add_node(user)
+    # build a side graph for songs from user-interaction data
+    s_graph = nx.Graph()
+    for i, song_id in enumerate(data['songs']):
+        s_graph.add_node(i, id=song_id)
+
+    # union all graph and s_graph together
+    graph = nx.algorithms.operators.all.disjoint_union_all([graph, s_graph])
 
     # save graph and adj_mtrx
     with open(os.path.join(args.output_dir, 'graph.pkl'), 'wb') as file:
@@ -141,7 +145,8 @@ def convert_rating(data):
 def build_kg(data):
     # new network graph
     graph = nx.Graph()
-
+    nodes = []
+    # add nodes and edges
     for nodes in data:
         for node in nodes:
             # add edge: song-artist
@@ -149,9 +154,11 @@ def build_kg(data):
 
             # update nodes: song and artist w/ real name
             graph.nodes[node['id']]['name'] = node['title']
+            graph.nodes[node['id']]['type'] = 'song'
             graph.nodes[node['id']]['is_item'] = True
             graph.nodes[node['artist_id']]['name'] = node['artist_name']
             graph.nodes[node['artist_id']]['is_item'] = False
+            graph.nodes[node['id']]['type'] = 'artist'
 
             # update
             # add edge: song-album if existing
@@ -161,9 +168,14 @@ def build_kg(data):
                 graph.add_edge(node['album_name'], node['album_date'], relation='album.released_in') # album-release-date
 
                 # update album-related nodes
+                graph.nodes[node['album_name']]['type'] = 'album_name'
+                graph.nodes[node['album_date']]['type'] = 'album_date'
                 graph.nodes[node['album_name']]['is_item'] = False
                 graph.nodes[node['album_date']]['is_item'] = False
-    # return graph and adjacency-matrix as dict
+
+    # convert node labels to integers
+    graph = nx.relabel.convert_node_labels_to_integers(graph, label_attribute='id')
+
     return graph
 
 
