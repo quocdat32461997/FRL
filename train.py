@@ -5,16 +5,14 @@ import time
 import math
 import torch
 import random
-import zipfile
 import argparse
 import numpy as np
-import pandas as pd
-import torch.nn. as nn
+import torch.nn as nn
 
 from lib import *
 
 
-def get_train_instance(train_df, negtaives_df):
+def get_train_instance(args, train_df, negtaives_df):
     users, items, ratings = [], [], []
     train_ratings = pd.merge(train_df, negtaives_df[['user', 'non_interacted_items']], on='user')
     train_ratings['negatives'] = train_ratings['non_interacted_items'].apply(lambda x: random.sample(x, args.num_ng))
@@ -31,7 +29,8 @@ def get_train_instance(train_df, negtaives_df):
 
     return torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
-def get_test_instance(test_df, negtaives_df):
+
+def get_test_instance(args, test_df, negtaives_df):
     users, items, ratings = [], [], []
     test_ratings = pd.merge(test_df, negtaives_df[['user', 'non_interacted_items']], on='user')
     for row in test_ratings.itertuples():
@@ -72,11 +71,11 @@ def main(args):
     train_df, test_df = leave_one_out(indexed_user_item_df)
 
     # extract negative sampling
-    negative_df = negative_sampling(indexed_user_item_df)
+    negative_df = negative_sampling(args, indexed_user_item_df, item_pool)
 
     # create train-data and test-data loaders
-    train_loader = get_train_instance(train_df, negative_df)
-    test_loader = get_test_instance(test_df, negative_df)
+    train_loader = get_train_instance(args, train_df, negative_df)
+    test_loader = get_test_instance(args, test_df, negative_df)
     print('Data loader: train {}, test {}'.
           format(type(train_loader), type(test_loader)))
     num_users = final_df['user'].nunique() + 1
@@ -173,7 +172,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, default='dataset/10k_songs/processed')
     parser.add_argument('--graph', type=str, default='dataset/10k_songs/graph.pkl')
-    parser.add_argument("--k-hop", type=int, default=3, help="K-hop")
+    parser.add_argument('--k-hop', type=int, default=3, help="K-hop")
+    parser.add_argument('--in-feature', type=int, default=256, help='Linear input feature size')
+    parser.add_argument('--out-feature', type=int, default=128, help='Linear output feature size')
+    parser.add_argument('--embed-size', type=int, default=128, help='Linear output feature size')
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--dropout", type=float, default=0.2, help="dropout rate")
     parser.add_argument("--batch_size", type=int, default=256, help="batch size for training")

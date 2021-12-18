@@ -8,10 +8,10 @@ from lib.utils import *
 class GraphAggregator(torch.nn.Module):
     def __init__(self, k_hop, num_embed, embed_size,
                  name='graph_aggregator'):
-        super(GraphAggregator, self).__init__(name=name)
+        super(GraphAggregator, self).__init__()
         self.k_hop = k_hop  # depth of graph-like tree
         self.entity_embeds = torch.nn.Embedding(
-            num_embeddinigs=num_embed,
+            num_embeddings=num_embed,
             embedding_dim=embed_size)
 
     def get_embedding(self, inputs):
@@ -86,7 +86,7 @@ class BehaviorAggregator(torch.nn.Module):
                  hidden_size,
                  num_layers=1,
                  name='behavior_aggregator'):
-        super(BehaviorAggregator, self).__init__(name=name)
+        super(BehaviorAggregator, self).__init__()
         self.gru = torch.nn.GRU(input_size=input_size,
                                 hidden_size=hidden_size,
                                 num_layers=num_layers,

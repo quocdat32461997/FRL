@@ -1,22 +1,23 @@
 # graph_model.py
 
-import pickle
 import torch
-from torch_geometric.nn import MessagePassing
-from torch_geometric.utils import add_self_loops, degree
 
 from lib.models.aggregator import GraphAggregator, BehaviorAggregator
 from lib.utils import *
 
 
 class GraphModel(torch.nn.Module):
-    def __init__(self, k_hop, graph,
-                 name='graph_model'):
-        super(GraphModel, self).__init__(name=name)
-        self.graph_conv = GraphConv(k_hop=k_hop,
-                                    graph=graph)
-        self.behavior_aggregator = BehaviorAggregator(input_size=None,
-                                                      hidden_size=None)
+    def __init__(self, args, num_embed, name='graph_model'):
+        super(GraphModel, self).__init__()
+        self.graph_conv = GraphConv(k_hop=args.k_hop,
+                                    graph=args.graph,
+                                    num_embed=num_embed,
+                                    embed_size=args.embed_size,
+                                    in_features=args.in_feature,
+                                    out_features=args.out_feature,
+                                    dropout=args.dropout)
+        self.behavior_aggregator = BehaviorAggregator(input_size=args.out_feature,
+                                                      hidden_size=args.out_feature)
 
     def forward(self, inputs):
         # inputs: list of past-click list
@@ -35,7 +36,7 @@ class GraphConv(torch.nn.Module):
                  num_embed, embed_size,
                  in_features, out_features, dropout=0.0,
                  name='graph_conv'):
-        super(GraphConv, self).__init__(name=name)
+        super(GraphConv, self).__init__()
         self.aggregator = GraphAggregator(k_hop=k_hop,
                                           num_embed=num_embed,
                                           embed_size=embed_size)

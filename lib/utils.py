@@ -1,6 +1,9 @@
 # utils.py
 
 import torch
+import pickle
+import random
+import pandas as pd
 
 
 def to_cuda(x):
@@ -32,7 +35,7 @@ def leave_one_out(ratings):
   return train[['user', 'song_item', 'rating']], test[['user', 'song_item', 'rating']]
 
 
-def negative_sampling(ratings):
+def negative_sampling(args, ratings, item_pool):
   interact_status = (ratings.groupby('user')['song_item'].apply(set).reset_index().rename(columns={'song_item': 'interacted_items'}))
   interact_status['non_interacted_items'] = interact_status['interacted_items'].apply(lambda x: item_pool - x)
   interact_status['random_non_interacted_samples'] = interact_status['non_interacted_items'].apply(lambda x: random.sample(x, args.num_ng_test))
